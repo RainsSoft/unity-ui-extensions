@@ -1,30 +1,29 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using UnityEngine;
+ï»¿using UnityEngine;
 using UnityEngine.UI;
-using UberLogger;
-namespace UberLogger
-{
-
+using System.Collections.Generic;
+using System;
+using Text = TMPro.TMP_Text;
+using InputField = TMPro.TMP_InputField;
+using Dropdown = TMPro.TMP_Dropdown;
+namespace UberLogger {
     /// <summary>
-    /// ÊµÏÖUGUI°æµÄ ÈÕÖ¾Êä³ö
+    /// å®ç°UGUIç‰ˆçš„ æ–‡æœ¬ä½¿ç”¨TextMesh Pro æ—¥å¿—è¾“å‡º
+    /// ä½†æ˜¯æ‰¹æ¬¡ä¼šå¤§æ¦‚ä¼šç¿»å€å¢åŠ ï¼Œæ‰€ä»¥çœ‹æƒ…å†µçœ‹æ—¥å¿—æ˜¯å¦ä½¿ç”¨ TextMeshPro æ¥æ˜¾ç¤º
     /// </summary>
     //[SmartAssembly.Attributes.DoNotObfuscate()]
     [DisallowMultipleComponent()]
-    public class UberLoggerAppUGUI : MonoBehaviour, UberLogger.ILogger
-    {
+    public class UberLoggerAppUGUITMP : MonoBehaviour, UberLogger.ILogger {
 
-        //ÈÕÖ¾ÄÚÈİ
-        [Header("ÈÕÖ¾Ïî»º´æ¸ù")]
+        //æ—¥å¿—å†…å®¹
+        [Header("æ—¥å¿—é¡¹ç¼“å­˜æ ¹")]
         public GameObject LogItemPoolRoot;
-        [Header("ÈÕÖ¾ÏîÄ£°å")]
+        [Header("æ—¥å¿—é¡¹æ¨¡æ¿")]
         public GameObject LogItemTemplate;
         //
         public Sprite SmallErrorIcon;
         public Sprite SmallWarningIcon;
         public Sprite SmallMessageIcon;
-        [Header("ÈÕÖ¾ÏîÈİÆ÷")]
+        [Header("æ—¥å¿—é¡¹å®¹å™¨")]
         public ScrollRect LogItemContain;
         #region log item pool
         Queue<GameObject> m_LogItemPool = new Queue<GameObject>();
@@ -61,7 +60,7 @@ namespace UberLogger
         //
         public int MaxLogCountShow = 200;
         public void Log(LogInfo logInfo) {
-            //ToDo:ÏŞÖÆ×î´óÏÔÊ¾ÌõÊı
+            //ToDo:é™åˆ¶æœ€å¤§æ˜¾ç¤ºæ¡æ•°
             LogInfo.Add(logInfo);
             if (logInfo.Severity == LogSeverity.Error) {
                 NoErrors++;
@@ -75,8 +74,8 @@ namespace UberLogger
             if (logInfo.Severity == LogSeverity.Error && PauseOnError) {
                 UnityEngine.Debug.Break();
             }
-            //ÒÆ³ı³¬³ö·¶Î§µÄ¼ÇÂ¼
-            #region ÏŞÖÆ×î´óÏÔÊ¾ÈÕÖ¾¼ÇÂ¼Êı
+            //ç§»é™¤è¶…å‡ºèŒƒå›´çš„è®°å½•
+            #region é™åˆ¶æœ€å¤§æ˜¾ç¤ºæ—¥å¿—è®°å½•æ•°
             if (MaxLogCountShow < 100) {
                 MaxLogCountShow = 100;
             }
@@ -92,7 +91,7 @@ namespace UberLogger
                 else {
                     NoMessages--;
                 }
-                //Todo:¸üĞÂÖ¸¶¨ÏîÄ¿
+                //Todo:æ›´æ–°æŒ‡å®šé¡¹ç›®
             }
             #endregion
             m_NeedUpdateLogShow = true;
@@ -119,8 +118,10 @@ namespace UberLogger
         /// Shows CPU name, cores (threads) count, GPU name, total VRAM, total RAM, screen DPI and screen size.
         /// </summary>
         public DeviceInfoCounterData deviceInfoCounter = new DeviceInfoCounterData();
+
+        public bool LoggerEnabled = false;
         #endregion
-        private void OnDestroy() {            
+        private void OnDestroy() {
             fpsCounter.Dispose();
             memoryCounter.Dispose();
             deviceInfoCounter.Dispose();
@@ -130,20 +131,62 @@ namespace UberLogger
         public void Close() {
             //Todo:
         }
+        [SerializeField()]
+        private Texture fingerTexture;
+        float fingerTexture_Size = 32;
+        float fingerTexture_Alpha = 1f;
+        bool fingerTexture_NeedDisplay = false;
+        Vector2 fingerTexture_Finger = new Vector2(-1f, -1f);
+        void OnGUI() {
+            if (Input.GetMouseButtonDown(0)) {
+                fingerTexture_Size = 32;
+                fingerTexture_Alpha = 1f;
+                fingerTexture_NeedDisplay = true;
+                fingerTexture_Finger = Input.mousePosition;
+            }
+            if (fingerTexture_NeedDisplay) {
+                fingerTexture_Size += Time.unscaledDeltaTime * 40f;
+                fingerTexture_Alpha -= Time.unscaledDeltaTime * 1f;
+                if (fingerTexture_Size > 80f) {
+                    fingerTexture_NeedDisplay = false;
+                }
+                if (fingerTexture_Alpha < 0.1f) {
+                    fingerTexture_Alpha = 0.1f;
+                }
+                float halfsize = fingerTexture_Size * 0.5f;
+                //Vector2 finger = Input.mousePosition;
+                if (fingerTexture_Finger != new Vector2(-1f, -1f)) {
+
+                    GUI.DrawTexture(new Rect(fingerTexture_Finger.x - halfsize, Screen.height - fingerTexture_Finger.y - halfsize, fingerTexture_Size, fingerTexture_Size),
+                        fingerTexture, ScaleMode.ScaleToFit, true, 0f, new Color(1f, 1f, 1f, fingerTexture_Alpha), 0, 0);
+
+                }
+            }
+
+
+        }
         private void Awake() {
             Debug.Log("uberlogger: Awake()");
-            //Ôö¼ÓÈÕÖ¾ÎÄ¼ş            
-            UberLoggerFile logfile = new UberLoggerFile(string.Format("UberLogger.Temp{0}.log", DateTime.Now.ToString("yyyy-MM-dd")));
-            //UberLogger.Logger.AddLogger(new UberLoggerFile( "UberLogger.Temp.log"), false);    
+            //å¢åŠ æ—¥å¿—æ–‡ä»¶         
+#if !DEBUG
+            UberLoggerFile logfile = new UberLoggerFile(string.Format("irobotqlog.{0}.log", DateTime.Now.ToString("yyyy-MM-dd")),true);
             UberLogger.Logger.AddLogger(logfile, false);
-            Debug.Log("create unity log file");
+#else
+            UberLoggerFile logfile = new UberLoggerFile("irobotqlog.log", true);
+            UberLogger.Logger.AddLogger(logfile, true);
+#endif
+
+            //UberLogger.Logger.AddLogger(new UberLoggerFile( "UberLogger.Temp.log"), false);    
+
+            Debug.Log("create unity log file:" + logfile.LogFileFullPath);
             //GameObject.DontDestroyOnLoad(this.gameObject);
             //
             fpsCounter.Init(this);
             memoryCounter.Init(this);
             deviceInfoCounter.Init(this);
-
+            Logger.Enabled = LoggerEnabled;
         }
+
         void Start() {
             //DontDestroyOnLoad(gameObject);
             UberLogger.Logger.AddLogger(this);
@@ -158,24 +201,24 @@ namespace UberLogger
                 OnClickButton_ExitApp();
             });
             //this.Button_ShowWindow.onClick.AddListener(()=> {
-            //    OnClickButton_ÏÔÊ¾´°¿Ú();
+            //    OnClickButton_æ˜¾ç¤ºçª—å£();
             //});
             UberUILongPressClick.Get(this.Button_ShowWindow.gameObject).onLongPress.AddListener(() => {
-                //³¤°´ÏÔÊ¾debug´°¿Ú
-                OnClickButton_ÏÔÊ¾´°¿Ú();
+                //é•¿æŒ‰æ˜¾ç¤ºdebugçª—å£
+                OnClickButton_æ˜¾ç¤ºçª—å£();
             });
             this.Button_CloseWindow.onClick.AddListener(() => {
-                OnClickButton_¹Ø±Õ´°¿Ú();
+                OnClickButton_å…³é—­çª—å£();
             });
             this.Button_ClearLog.onClick.AddListener(() => {
-                OnClickButton_Çå¿ÕÈÕÖ¾();
+                OnClickButton_æ¸…ç©ºæ—¥å¿—();
             });
             this.InputField_FilterRegex.onEndEdit.AddListener((A) => {
-                OnClickButton_¹ıÂË(A);
+                OnClickButton_è¿‡æ»¤(A);
             });
             this.Button_ScrollToBottom.onClick.AddListener(() => {
-                OnClickButton_¹ö¶¯ÈÕÖ¾µ½µ×²¿();
-            });                     
+                OnClickButton_æ»šåŠ¨æ—¥å¿—åˆ°åº•éƒ¨();
+            });
             //
             ActivateCounters();
         }
@@ -185,22 +228,22 @@ namespace UberLogger
             deviceInfoCounter.Activate();
 
             if (fpsCounter.Enabled || memoryCounter.Enabled || deviceInfoCounter.Enabled) {
-               UpdateTexts();
+                UpdateTexts();
             }
-            OnClickButton_Çå¿ÕÈÕÖ¾();
+            OnClickButton_æ¸…ç©ºæ—¥å¿—();
         }
-        [Header("ÈÕÖ¾Ïî¹ö¶¯")]
+        [Header("æ—¥å¿—é¡¹æ»šåŠ¨")]
         public Button Button_ScrollToBottom;
-        #region Ôö¼ÓFPS¼ÆÊı
+        #region å¢åŠ FPSè®¡æ•°
         [Header("fps:")]
         public Text Text_FPS;
-        //0.5Ãë¸üĞÂÒ»´Î FPS ¹ØÁªµÄUI  TEXT  ÌáÉıĞ§ÂÊ
+        //0.5ç§’æ›´æ–°ä¸€æ¬¡ FPS å…³è”çš„UI  TEXT  æå‡æ•ˆç‡
         public float updateInterval = 0.5f;
         float deltaFps = 0f; // FPS accumulated over the interval
         int frames = 0; // Frames drawn over the interval
         float timeleft = 0.5f; // Left time for current interval
         string fpsText_text = "60 FPS";
-      
+
         void Update() {
             timeleft -= Time.deltaTime;
             deltaFps += Time.timeScale / Time.deltaTime;
@@ -218,17 +261,17 @@ namespace UberLogger
                 frames = 0;
                 //
                 UpdateTexts();
-                UpdateUI_ÈÕÖ¾¼ÆÊı();
+                UpdateUI_æ—¥å¿—è®¡æ•°();
                 UpdateUI_LogsShow();
             }
         }
         private void UpdateTexts() {
-            Text_FPS.text = fpsText_text;     
+            Text_FPS.text = fpsText_text;
         }
-        [Header("ÈÕÖ¾´°¿Ú")]
+        [Header("æ—¥å¿—çª—å£")]
         public GameObject Plane_Window;
 
-        [Header("Çå¿ÕÈÕÖ¾")]
+        [Header("æ¸…ç©ºæ—¥å¿—")]
         public Button Button_ClearLog;
         public Toggle Toggle_ShowError;
         public Toggle Toggle_ShowWarning;
@@ -237,9 +280,9 @@ namespace UberLogger
         public Text Text_WarningCount;
         public Text Text_NormalCount;
         bool m_NeedUpdateLogShow = false;
-        [Header("ÈÕÖ¾¹ıÂË¿ò")]
+        [Header("æ—¥å¿—è¿‡æ»¤æ¡†")]
         public InputField InputField_FilterRegex;
-        [Header("ÏÔÊ¾ÈÕÖ¾´°¿Ú")]
+        [Header("æ˜¾ç¤ºæ—¥å¿—çª—å£")]
         public Button Button_ShowWindow;
         bool ShowWindow = false;
         public Sprite ButtonTexture;
@@ -249,11 +292,11 @@ namespace UberLogger
             if (NoErrors > 0) {
                 buttonTex = ErrorButtonTexture;
             }
-            Button_ShowWindow.transform.FindChild("SR_Image").GetComponent<Image>().overrideSprite = buttonTex;
+            Button_ShowWindow.transform.Find("SR_Image").GetComponent<Image>().overrideSprite = buttonTex;
         }
-        [Header("Òş²ØÈÕÖ¾´°¿Ú")]
+        [Header("éšè—æ—¥å¿—çª—å£")]
         public Button Button_CloseWindow;
-        void UpdateUI_ÈÕÖ¾¼ÆÊı() {
+        void UpdateUI_æ—¥å¿—è®¡æ•°() {
             Text_ErrorCout.text = NoErrors.ToString();
             Text_WarningCount.text = NoWarnings.ToString();
             Text_NormalCount.text = NoMessages.ToString();
@@ -273,7 +316,7 @@ namespace UberLogger
                 }
 
             }
-            //Todo:¸üĞÂÒªÏÔÊ¾µÄÏîÄ¿ ¸üĞÂlogÁĞ±í
+            //Todo:æ›´æ–°è¦æ˜¾ç¤ºçš„é¡¹ç›® æ›´æ–°logåˆ—è¡¨
             int logContainChildCount = this.LogItemContain.content.childCount;
             if (logContainChildCount < LogInfoNeedShow.Count) {
                 int needadd = LogInfoNeedShow.Count - logContainChildCount;
@@ -293,7 +336,7 @@ namespace UberLogger
                     releaseLogItem(childlogitem);
                 }
             }
-            //¸üĞÂÏÔÊ¾
+            //æ›´æ–°æ˜¾ç¤º
             for (int i = 0; i < LogInfoNeedShow.Count; i++) {
                 var log = LogInfoNeedShow[i];
                 Transform childlogitem = this.LogItemContain.content.GetChild(i);
@@ -301,15 +344,15 @@ namespace UberLogger
                 //childlogitem.FindChild("SR_BG").GetComponent<Button>().onClick.AddListener(() => {
                 //    OnClickButton_LogItem(i);
                 //});
-                childlogitem.FindChild("SR_Blob").GetComponent<Image>().overrideSprite = GetIconForLog(log);
-                //·ÀÖ¹×Ö·û¹ı³¤ ¶Ô×Ö·û½ØÈ¡                
+                childlogitem.Find("SR_Blob").GetComponent<Image>().overrideSprite = GetIconForLog(log);
+                //é˜²æ­¢å­—ç¬¦è¿‡é•¿ å¯¹å­—ç¬¦æˆªå–                
                 var showMessage = log.Message;
                 if (showMessage.Length > 1000) {
                     showMessage = showMessage.Substring(0, 1000);
                 }
                 //Make all messages single line
                 showMessage = showMessage.Replace(System.Environment.NewLine, " ");
-                childlogitem.FindChild("SR_Text").GetComponent<Text>().text = string.Format("{0}{1}", ShowTimes ? ("[" + log.GetTimeStampAsString() + "]: ") : "", showMessage);
+                childlogitem.Find("SR_Text").GetComponent<Text>().text = string.Format("{0}{1}", ShowTimes ? ("[" + log.GetTimeStampAsString() + "]: ") : "", showMessage);
             }
         }
 
@@ -332,12 +375,12 @@ namespace UberLogger
 
             return false;
         }
-        [Header("ÈÕÖ¾Ïî¶ÑÕ»")]
+        [Header("æ—¥å¿—é¡¹å †æ ˆ")]
         public Text Text_Callstack;
-        [Header("ÍË³öAPP")]
+        [Header("é€€å‡ºAPP")]
         public Button Button_ExitApp;
         /// <summary>
-        /// ¸ù¾İÈÕÖ¾ È¡Í¼±ê
+        /// æ ¹æ®æ—¥å¿— å–å›¾æ ‡
         /// </summary>
         /// <param name="log"></param>
         /// <returns></returns>
@@ -365,14 +408,20 @@ namespace UberLogger
                 return;
             }
             LogInfo log = LogInfoNeedShow[index];
-            //Todo:ÏÔÊ¾ÏêÏ¸ĞÅÏ¢
-            if (log.Callstack.Count > 0) {
-                Text_Callstack.text = log.Callstack[0].GetFormattedMethodName();
+            //Todo:æ˜¾ç¤ºè¯¦ç»†ä¿¡æ¯
+            Text_Callstack.text = log.Message;
+            int log_Callstack_Count = (log.Callstack == null ? 0 : log.Callstack.Count);
+            if (log_Callstack_Count > 0) {
+                log_Callstack_Count = log.Callstack.Count;
+                Text_Callstack.text += log.Callstack[0].GetFormattedMethodName();
+            }
+            else if (string.IsNullOrEmpty(log.Callstack_String) == false) {
+                Text_Callstack.text = log.Callstack_String;
             }
             else {
-                Text_Callstack.text = "none";
+                Text_Callstack.text += "none";
             }
-            for (int c1 = 1; c1 < log.Callstack.Count; c1++) {
+            for (int c1 = 1; c1 < log_Callstack_Count; c1++) {
                 var frame = log.Callstack[c1];
                 var methodName = frame.GetFormattedMethodName();
                 if (!String.IsNullOrEmpty(methodName)) {
@@ -381,8 +430,8 @@ namespace UberLogger
 
             }
         }
-        void OnClickButton_Çå¿ÕÈÕÖ¾() {
-            OnClickButton_¹ö¶¯ÈÕÖ¾µ½¶¥²¿();
+        void OnClickButton_æ¸…ç©ºæ—¥å¿—() {
+            OnClickButton_æ»šåŠ¨æ—¥å¿—åˆ°é¡¶éƒ¨();
             Clear();
             List<string> infos = new List<string>();
             if (!string.IsNullOrEmpty(fpsCounter.lastText)) {
@@ -398,49 +447,49 @@ namespace UberLogger
                 var info = infos[i].Replace('\r', ' ');
                 info = info.Replace('\n', ' ');
                 var logInfo = new LogInfo(null, "", LogSeverity.Message, new List<LogStackFrame>(), info.Trim());
-                this.Log(logInfo);                
+                this.Log(logInfo);
             }
             m_NeedUpdateLogShow = true;
             UpdateUI_LogsShow();
             //
-            
+
         }
 
-        void OnClickButton_Çå³ı¹ıÂË() {
+        void OnClickButton_æ¸…é™¤è¿‡æ»¤() {
             //ClearSelectedMessage();
             FilterRegex = null;
             FilterRegexText = "";
-            //Ã¿Ãë¶¨Ê±¸üĞÂ
+            //æ¯ç§’å®šæ—¶æ›´æ–°
             m_NeedUpdateLogShow = true;
             UpdateUI_LogsShow();
         }
-        void OnClickButton_¹ıÂË(string filterText) {
+        void OnClickButton_è¿‡æ»¤(string filterText) {
             //string filterText = InputField_FilterRegex.text;
             if (filterText != FilterRegexText) {
                 //ClearSelectedMessage();
                 FilterRegexText = filterText;
             }
-            //TODO:Ã¿Ãë¶¨Ê±¸üĞÂÄÚÈİ
+            //TODO:æ¯ç§’å®šæ—¶æ›´æ–°å†…å®¹
             System.Text.RegularExpressions.Regex filterRegex = null;
             if (!String.IsNullOrEmpty(FilterRegexText)) {
                 filterRegex = new System.Text.RegularExpressions.Regex(FilterRegexText);
             }
             this.FilterRegex = filterRegex;
             m_NeedUpdateLogShow = true;
-            OnClickButton_¹ö¶¯ÈÕÖ¾µ½¶¥²¿();
+            OnClickButton_æ»šåŠ¨æ—¥å¿—åˆ°é¡¶éƒ¨();
             UpdateUI_LogsShow();
         }
-        void OnClickButton_¹ö¶¯ÈÕÖ¾µ½µ×²¿() {
+        void OnClickButton_æ»šåŠ¨æ—¥å¿—åˆ°åº•éƒ¨() {
             LogItemContain.normalizedPosition = new Vector2(0, 0);
         }
-        void OnClickButton_¹ö¶¯ÈÕÖ¾µ½¶¥²¿() {
+        void OnClickButton_æ»šåŠ¨æ—¥å¿—åˆ°é¡¶éƒ¨() {
             LogItemContain.normalizedPosition = new Vector2(0, 1);
         }
-        void OnClickButton_¹Ø±Õ´°¿Ú() {
+        void OnClickButton_å…³é—­çª—å£() {
             this.Plane_Window.SetActive(false);
             ShowWindow = false;
         }
-        void OnClickButton_ÏÔÊ¾´°¿Ú() {
+        void OnClickButton_æ˜¾ç¤ºçª—å£() {
             this.Plane_Window.SetActive(true);
             ShowWindow = true;
         }
@@ -469,4 +518,3 @@ namespace UberLogger
 
     }
 }
-
