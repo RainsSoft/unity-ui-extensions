@@ -1,5 +1,4 @@
-﻿namespace TinyTeam.UI
-{
+﻿namespace TinyTeam.UI {
     using System;
     using UnityEngine;
     using UnityEngine.UI;
@@ -35,29 +34,30 @@
     ///  4：功能按钮尽量靠边对齐(上下左右)，中间的UI如果居中对齐，需要注意在纵横比比较小的时候，不能叠一起
     ///      配合xARM+Aspect+and+Resolution+Master插件，进行UI取舍
     ///by sgd 
-    ///2017-12
+    ///2018-8
+    ///   经过验证，我们Canvas根据Canvas Scaler组件设置宽高比（比如1280x720 Match选高度为1）
+    ///   内部图片Image配合Aspect Ratio Fitter组件保持图片缩放不变形
+    ///2019-10-14
+    ///   增加不能同时开启相同名称的协程
     /// </summary>
 
     #region define
 
-    public enum UIType
-    {
+    public enum UIType {
         Normal,
         Fixed,
         PopUp,
         None,      //独立的窗口
     }
 
-    public enum UIMode
-    {
+    public enum UIMode {
         DoNothing,
         HideOther,     // 闭其他界面
         NeedBack,      // 点击返回按钮关闭当前,不关闭其他界面(需要调整好层级关系)
         NoNeedBack,    // 关闭TopBar,关闭其他界面,不加入backSequence队列
     }
 
-    public enum UICollider
-    {
+    public enum UICollider {
         None,      // 显示该界面不包含碰撞背景
         Normal,    // 碰撞透明背景
         WithBg,    // 碰撞非透明背景
@@ -66,23 +66,25 @@
     /// <summary>
     /// 进行改造，每个scene一个UIROOT,在切换scene的时候 直接销毁老的UIROOT就好了
     /// </summary>
-    public abstract class TTUIPage 
-    {
+    public abstract class TTUIPage {
         /// <summary>
         /// 所有UI节点下面的子节点必须为UI节点，而不是Transform子节点
         /// </summary>
         /// <param name="root"></param>
         /// <param name="allchilds"></param>
         protected void GetUIObjAllChilds(RectTransform root, ref List<RectTransform> allchilds) {
-            for (int i = 0; i < root.childCount; i++) {
+            for(int i = 0; i < root.childCount; i++) {
                 RectTransform child = root.GetChild(i) as RectTransform;
 
 #if DEBUG
-                //Debug.Log("GetUIObjAllChilds(...)=>"+child.name);
-                for (int j = 0; j < allchilds.Count; j++) {
-                    if (string.Compare(allchilds[j].name, child.name, true) == 0) {
-                        //Debug.Log("重复子节点名称:GetUIObjAllChilds(...)=>" + child.name);
-                        break;
+                if (child.name.StartsWith("c_")) {
+                    //"c_"名前缀 为内部需要用的UGUI对象   
+                    //Debug.Log("GetUIObjAllChilds(...)=>"+child.name);
+                    for (int j = 0; j < allchilds.Count; j++) {
+                        if (string.Compare(allchilds[j].name, child.name, true) == 0) {
+                            Debug.Log("重复子节点名称:GetUIObjAllChilds(...)=>" + child.name);
+                            break;
+                        }
                     }
                 }
 #endif
@@ -90,11 +92,18 @@
                 GetUIObjAllChilds(child, ref allchilds);
             }
         }
+        protected List<RectTransform> GetUIObjAllChilds() {
+            List<RectTransform> ret = new List<RectTransform>();
+            GetUIObjAllChilds(this.gameObject.GetComponent<RectTransform>(), ref ret);
+            return ret;
+        }
         public string name = string.Empty;
         /// <summary>
         /// 是否被销毁
         /// </summary>
-        public bool IsDestoryed { get; private set; }
+        public bool IsDestoryed {
+            get; private set;
+        }
         //this page's id
         public int id = -1;
 
@@ -130,7 +139,11 @@
 
         //refresh page 's data.
         private object m_data = null;
-        protected object data { get { return m_data; } }
+        protected object data {
+            get {
+                return m_data;
+            }
+        }
         /// <summary>
         /// 初始默认隐藏页面后 data就设置为null,现在已经改造
         /// 当执行 _realse时候 data才设置为null
@@ -142,6 +155,22 @@
         }
         public void setData(object data) {
             m_data = data;
+        }
+        /// <summary>
+        /// 使用根节点TTUIRoot_Instance.CoStart(name,IEnumerator) 开启指定名称的协程
+        /// 同名称的协程不能同时开启
+        /// </summary>
+        /// <param name="coName">协程名称</param>
+        /// <param name="co">枚举方法</param>
+        /// <param name="suffixPageName">后缀名 默认为page.Name</param>
+        protected Coroutine StartCoroutine(string coName,IEnumerator co,bool suffixPageName=true) {
+           return this.TTUIRoot_Instance.CoStart(coName+(suffixPageName?("<-"+this.name):""), co);
+        }
+        protected void StopCoroutine(string coName,bool suffixPageName=true) {
+            this.TTUIRoot_Instance.CoStop(coName+(suffixPageName?("<-"+this.name):""));
+        }
+        protected void IsCoWorking(string coName,bool suffixPageName=true) {
+            this.TTUIRoot_Instance.IsCoRuning(coName+(suffixPageName?("<-"+this.name):""));
         }
         /// <summary>
         /// 外面赋值 指定加载UI预设方式（比如从assetbundle加载）
@@ -161,17 +190,18 @@
         public static GameObject CreateUIByPathOnly(string uipath) {
             GameObject go = null;
             //1:instance UI
-            if (string.IsNullOrEmpty(uipath) == false) {
-                if (delegateSyncLoadUI != null) {
+            if(string.IsNullOrEmpty(uipath) == false) {
+                if(delegateSyncLoadUI != null) {
                     Object o = delegateSyncLoadUI(uipath);
                     go = o != null ? GameObject.Instantiate(o) as GameObject : null;
                 }
                 else {
-                    go = GameObject.Instantiate(Resources.Load(uipath)) as GameObject;
+                    throw new Exception("delegateSyncLoadUI未赋值");
+                    //go = GameObject.Instantiate(Resources.Load(uipath)) as GameObject;
                 }
                 //protected.
-                if (go == null) {
-                    Debug.LogError("[UI] Cant sync load your ui prefab.");
+                if(go == null) {
+                    Debug.LogError("[UI] Cant sync load your ui prefab." + uipath);
                 }
             }
             return go;
@@ -191,15 +221,15 @@
             );
             //这里的超时跳出,有啥用啊,前面的异步加载又无法中止
             float _t0 = Time.realtimeSinceStartup;
-            while (_loading) {
-                if (Time.realtimeSinceStartup - _t0 >= 10.0f) {
+            while(_loading) {
+                if(Time.realtimeSinceStartup - _t0 >= 10.0f) {
                     Debug.LogError("[UI] WTF async load your ui prefab timeout!");
                     //超时跳出
                     yield break;
                 }
                 yield return null;
             }
-            if (uiGoCreateCallback != null) {
+            if(uiGoCreateCallback != null) {
                 uiGoCreateCallback(go);
             }
         }
@@ -209,21 +239,22 @@
         /// <param name="ui"></param>
         /// <param name="uiParent"></param>
         public static void AnchorUIGoToParent(RectTransform ui, RectTransform uiParent, bool StretchFill) {
-            if (ui == null || uiParent == null) return;
+            if(ui == null || uiParent == null)
+                return;
 
             //移除canvas           
             CanvasScaler cs = ui.GetComponent<CanvasScaler>();
-            if (cs != null) {
+            if(cs != null) {
                 //GameObject.Destroy(cs);
                 cs.enabled = false;
             }
             GraphicRaycaster gr = ui.GetComponent<GraphicRaycaster>();
-            if (gr != null) {
+            if(gr != null) {
                 //GameObject.Destroy(gr);
                 //gr.enabled = false;
             }
             Canvas cp = ui.GetComponent<Canvas>();
-            if (cp != null) {
+            if(cp != null) {
                 //GameObject.Destroy(cp);
                 //对子canvas的处理
                 //cp.enabled = false;
@@ -247,7 +278,7 @@
             //子canvas保持和父canvas 一致
             //RectTransform rtf = ui.GetComponent<RectTransform>();
             //if (rtf != null && rtf.parent != null) {
-            if (StretchFill) {
+            if(StretchFill) {
                 ui.anchorMax = new Vector2(1f, 1f);
                 ui.anchorMin = new Vector2(0f, 0f);
                 ui.anchoredPosition = new Vector2(0f, 0f);
@@ -255,7 +286,7 @@
                 ui.offsetMax = new Vector2(0f, 0f);
                 ui.offsetMin = new Vector2(0f, 0f);
                 //
-                ui.sizeDelta = new Vector2(0f, 0f);
+                //ui.sizeDelta = new Vector2(0f, 0f);
             }
             //}
         }
@@ -268,7 +299,7 @@
 
         ///Show UI Refresh Eachtime.
         public abstract void Refresh();
-        
+
         ///Active this UI
         public virtual void Active() {
             this.gameObject.SetActive(true);
@@ -285,12 +316,48 @@
             //this.m_data = null;
             Resources.UnloadUnusedAssets();
         }
+        public virtual void Close() {
+            this.TTUIRoot_Instance.ClosePage(this);
+        }
 
+        protected virtual void PlaySound_ButtonClick() {
+            this.TTUIRoot_Instance.PlaySound_ButtonClick();
+        }
+        /*
+        protected virtual void HookButtonClickSound() {
+            List<RectTransform> childs = new List<RectTransform>();
+            GetUIObjAllChilds(this.gameObject.GetComponent<RectTransform>(), ref childs);
+            HookButtonClickSound(childs);
+        }*/
+        protected virtual void HookButtonClickSound(List<RectTransform> childs ) {            
+            foreach (var v in childs) {
+                var btn = v.GetComponent<Button>();
+                if ( btn!= null) {
+                    var et=v.gameObject.GetComponent<UnityEngine.EventSystems.EventTrigger>();
+                    if (et == null) {
+                        et=v.gameObject.AddComponent<UnityEngine.EventSystems.EventTrigger>();
+                    }
+                    var eet = new UnityEngine.EventSystems.EventTrigger.Entry() {
+                        eventID = UnityEngine.EventSystems.EventTriggerType.PointerDown,
+                        callback = new UnityEngine.EventSystems.EventTrigger.TriggerEvent()
+                    };
+                    eet.callback.AddListener((ed)=> {
+                        PlaySound_ButtonClick();
+                    });
+                    et.triggers.Add(eet);
+                }
+            }
+        }
         #endregion
 
         #region internal api
         protected TTUIRoot TTUIRoot_Instance;
-        private TTUIPage() { }
+        public TTUIPage() {
+            TTUIRoot_Instance = TTUIRoot.CreateOrFind();
+            //when create one page.
+            //bind special delegate .
+            TTUIBind.Bind();
+        }
         /// <summary>
         /// 继承当前实现
         /// </summary>
@@ -303,7 +370,7 @@
             this.mode = mod;
             this.collider = col;
             this.name = this.GetType().ToString();
-            TTUIRoot_Instance = TTUIRoot.CreateOrFind(levelName);
+            TTUIRoot_Instance = TTUIRoot.CreateOrFind();
             //when create one page.
             //bind special delegate .
             TTUIBind.Bind();
@@ -315,7 +382,7 @@
         /// </summary>
         protected internal void Show() {
             //1:instance UI
-            if (this.gameObject == null && string.IsNullOrEmpty(uiPath) == false) {
+            if(this.gameObject == null && string.IsNullOrEmpty(uiPath) == false) {
                 GameObject go = null;
                 //if (delegateSyncLoadUI != null) {
                 //    Object o = delegateSyncLoadUI(uiPath);
@@ -326,7 +393,7 @@
                 //}
                 go = CreateUIByPathOnly(uiPath);
                 //protected.
-                if (go == null) {
+                if(go == null) {
                     //Debug.LogError("[UI] Cant sync load your ui prefab.");
                     return;
                 }
@@ -361,7 +428,7 @@
         IEnumerator AsyncShow(Action callback) {
             //1:Instance UI
             //FIX:support this is manager multi gameObject,instance by your self.
-            if (this.gameObject == null && string.IsNullOrEmpty(uiPath) == false) {
+            if(this.gameObject == null && string.IsNullOrEmpty(uiPath) == false) {
                 GameObject go = null;
                 //bool _loading = true;
                 /*
@@ -418,7 +485,7 @@
                 while(loadAsync.MoveNext()) {
                     yield return null;
                 }
-
+                loadAsync.TryDispose();
 
             }
             else {
@@ -431,13 +498,16 @@
                 //:popup this node to top if need back.
                 PopNode(this);
 
-                if (callback != null) callback();
+                if(callback != null)
+                    callback();
             }
         }
 
         internal bool CheckIfNeedBack() {
-            if (type == UIType.Fixed || type == UIType.PopUp || type == UIType.None) return false;
-            else if (mode == UIMode.NoNeedBack || mode == UIMode.DoNothing) return false;
+            if(type == UIType.Fixed || type == UIType.PopUp || type == UIType.None)
+                return false;
+            else if(mode == UIMode.NoNeedBack || mode == UIMode.DoNothing)
+                return false;
             return true;
         }
         /// <summary>
@@ -447,17 +517,17 @@
         protected virtual void AnchorUIGameObject_Before(GameObject ui) {
             //移除canvas           
             CanvasScaler cs = ui.GetComponent<CanvasScaler>();
-            if (cs != null) {
+            if(cs != null) {
                 //GameObject.Destroy(cs);
                 cs.enabled = false;
             }
             GraphicRaycaster gr = ui.GetComponent<GraphicRaycaster>();
-            if (gr != null) {
+            if(gr != null) {
                 //GameObject.Destroy(gr);
                 //gr.enabled = false;
             }
             Canvas cp = ui.GetComponent<Canvas>();
-            if (cp != null) {
+            if(cp != null) {
                 //GameObject.Destroy(cp);
                 //对子canvas的处理
                 //cp.enabled = false;
@@ -466,7 +536,7 @@
         protected virtual void AnchorUIGameObject_After(GameObject ui) {
             //子canvas保持和父canvas 一致
             RectTransform rtf = ui.GetComponent<RectTransform>();
-            if (rtf != null && rtf.parent != null) {
+            if(rtf != null && rtf.parent != null) {
                 rtf.anchorMax = new Vector2(1f, 1f);
                 rtf.anchorMin = new Vector2(0f, 0f);
                 rtf.anchoredPosition = new Vector2(0f, 0f);
@@ -479,7 +549,8 @@
         }
         protected void AnchorUIGameObject(GameObject ui) {
             //if (TTUIRoot.Instance == null || ui == null) return;
-            if (TTUIRoot_Instance == null || ui == null) return;
+            if(TTUIRoot_Instance == null || ui == null)
+                return;
             AnchorUIGameObject_Before(ui);
             this.gameObject = ui;
             this.transform = ui.transform;
@@ -488,7 +559,7 @@
             Vector3 anchorPos = Vector3.zero;
             Vector2 sizeDel = Vector2.zero;
             Vector3 scale = Vector3.one;
-            if (ui.GetComponent<RectTransform>() != null) {
+            if(ui.GetComponent<RectTransform>() != null) {
                 anchorPos = ui.GetComponent<RectTransform>().anchoredPosition;
                 sizeDel = ui.GetComponent<RectTransform>().sizeDelta;
                 scale = ui.GetComponent<RectTransform>().localScale;
@@ -500,21 +571,21 @@
 
             //Debug.Log("anchorPos:" + anchorPos + "|sizeDel:" + sizeDel);
 
-            if (type == UIType.Fixed) {
+            if(type == UIType.Fixed) {
                 //ui.transform.SetParent(TTUIRoot.Instance.fixedRoot);
                 ui.transform.SetParent(TTUIRoot_Instance.fixedRoot);
             }
-            else if (type == UIType.Normal) {
+            else if(type == UIType.Normal) {
                 //ui.transform.SetParent(TTUIRoot.Instance.normalRoot);
                 ui.transform.SetParent(TTUIRoot_Instance.normalRoot);
             }
-            else if (type == UIType.PopUp) {
+            else if(type == UIType.PopUp) {
                 //ui.transform.SetParent(TTUIRoot.Instance.popupRoot);
                 ui.transform.SetParent(TTUIRoot_Instance.popupRoot);
             }
 
 
-            if (ui.GetComponent<RectTransform>() != null) {
+            if(ui.GetComponent<RectTransform>() != null) {
                 ui.GetComponent<RectTransform>().anchoredPosition = anchorPos;
                 ui.GetComponent<RectTransform>().sizeDelta = sizeDel;
                 ui.GetComponent<RectTransform>().localScale = scale;
@@ -805,6 +876,7 @@
             this.TTUIRoot_Instance = null;
             this.m_data = null;
             //this ui's gameobject, 其对象由root管理以及销毁，这里只是引用
+            //by czj,root没有处理该gameObject??       
             this.gameObject = null;
             this.transform = null;
             //

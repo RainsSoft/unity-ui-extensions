@@ -3,10 +3,10 @@
  * @Date: 2017-05-27 18:14:53 
  * @Last Modified by: chiuan wei
  * @Last Modified time: 2017-05-27 18:33:48
- * @Change: sgd 2017-10-11 不再使用单例模式，一个scene一个uiroot
+ * @Change: sgd 2017-10-11 不再使用单例模式，一个scene一个uiroot,有利于关卡切换时候资源卸载
+ * @Change: sgd 2019-10-14 增加受管理的开启指定名称协程（相同名称的协程如果已经在运行则不能开启新的相同名称的协程）
  */
-namespace TinyTeam.UI
-{
+namespace TinyTeam.UI {
     using System.Collections;
     using UnityEngine.EventSystems;
     using UnityEngine.UI;
@@ -14,6 +14,8 @@ namespace TinyTeam.UI
     using UnityEngine.SceneManagement;
     using System.Collections.Generic;
     using System;
+    using IRobotQ.Core;
+    using IRobotQ;
 
     /// <summary>
     /// Init The UI Root
@@ -26,8 +28,7 @@ namespace TinyTeam.UI
     /// -Camera
     /// </summary>
     [DisallowMultipleComponent()]
-    public class TTUIRoot : MonoBehaviour
-    {
+    public class TTUIRoot : MonoBehaviour {
         //private static TTUIRoot m_Instance = null;
         //public static TTUIRoot Instance {
         //    get {
@@ -72,22 +73,31 @@ namespace TinyTeam.UI
         /// <summary>
         /// 是否被销毁
         /// </summary>
-        public bool IsDestoryed { get; private set; }
-        public static TTUIRoot CreateOrFind(string levelname/*UIRoot_Root*/) {
-            TTUIRoot root = InitRoot(levelname);
-            root.refLevelName = levelname;
+        public bool IsDestoryed {
+            get; private set;
+        }
+        /// <summary>
+        /// 创建(如果已经存在则直接返回)
+        /// </summary>
+        /// <param name="go_uiroot_name">"UIRoot" / "UIRoot_Global" </param>
+        /// <returns></returns>
+        public static TTUIRoot CreateOrFind(string go_uiroot_name="UIRoot"/*UIRoot_Root*/) {
+            TTUIRoot root = InitRoot(go_uiroot_name);
+         
             AdaptCamera(root);
             return root;
-        } 
+        }
         #region 创建root相关
+
+        #region 相机适配 迁移到脚本组件TTUICameraAdapter
         static void AdaptCamera(TTUIRoot uiroot) {
+            return;
             //定义 宽小于1000或者高小于640的使用缩放模式 //iphone6 1136x640 
             if (Screen.width < 1000 || Screen.height < 640) {
-                CanvasScaler cscaler= uiroot.GetComponent<CanvasScaler>();
+                CanvasScaler cscaler = uiroot.GetComponent<CanvasScaler>();
                 //修改为缩放模式，保证屏幕再小也能显示整个UI
                 cscaler.screenMatchMode = CanvasScaler.ScreenMatchMode.Expand;
             }
-            return;
             //UI适配 在不同纵横比屏幕中会有重叠或者 有黑边问题
             Camera camera = uiroot.uiCamera;
             //if (camera == null) {
@@ -137,96 +147,98 @@ namespace TinyTeam.UI
 
 
         }
-        static TTUIRoot InitRoot(string levelname) {
+
+        #endregion
+        static TTUIRoot InitRoot(string go_uiroot_name) {
             //改造为使用预设模式
-            GameObject goRoot = GameObject.Find("UIRoot_" + levelname);
+            GameObject goRoot = GameObject.Find(go_uiroot_name);
             if (goRoot == null) {
-                goRoot = Instantiate<GameObject>(Resources.Load<GameObject>("UIFrame/UIRoot"));
-                goRoot.name = "UIRoot_" + levelname;
-                SceneManager.MoveGameObjectToScene(goRoot, SceneManager.GetSceneByName(levelname));
+                goRoot = Instantiate<GameObject>(ResManager.Singleton.LoadAsset<GameObject>("UIFrame/UIRoot.prefab"));
+                goRoot.name = go_uiroot_name;
+               // SceneManager.MoveGameObjectToScene(goRoot, SceneManager.GetSceneByName(levelname));
             }
             TTUIRoot m_Instance = goRoot.GetComponent<TTUIRoot>();
             m_Instance.root = goRoot.transform;
-            m_Instance.uiCamera = goRoot.transform.FindChild("UICamera").GetComponent<Camera>();
-            m_Instance.normalRoot = goRoot.transform.FindChild("NormalRoot");
-            m_Instance.fixedRoot = goRoot.transform.FindChild("FixedRoot");
-            m_Instance.popupRoot = goRoot.transform.FindChild("PopupRoot");
+            m_Instance.uiCamera = goRoot.transform.Find("UICamera").GetComponent<Camera>();
+            m_Instance.normalRoot = goRoot.transform.Find("NormalRoot");
+            m_Instance.fixedRoot = goRoot.transform.Find("FixedRoot");
+            m_Instance.popupRoot = goRoot.transform.Find("PopupRoot");
             return m_Instance;
-            //使用预设模式
-            GameObject go = new GameObject("UIRoot");
-            go.layer = LayerMask.NameToLayer("UI");
-            m_Instance = go.AddComponent<TTUIRoot>();
-            go.AddComponent<RectTransform>();
+            ////使用预设模式
+            //GameObject go = new GameObject("UIRoot");
+            //go.layer = LayerMask.NameToLayer("UI");
+            //m_Instance = go.AddComponent<TTUIRoot>();
+            //go.AddComponent<RectTransform>();
 
-            Canvas can = go.AddComponent<Canvas>();
-            can.renderMode = RenderMode.ScreenSpaceCamera;
-            can.pixelPerfect = true;
+            //Canvas can = go.AddComponent<Canvas>();
+            //can.renderMode = RenderMode.ScreenSpaceCamera;
+            //can.pixelPerfect = true;
 
-            go.AddComponent<GraphicRaycaster>();
+            //go.AddComponent<GraphicRaycaster>();
 
-            m_Instance.root = go.transform;
+            //m_Instance.root = go.transform;
 
-            GameObject camObj = new GameObject("UICamera");
-            camObj.layer = LayerMask.NameToLayer("UI");
-            camObj.transform.parent = go.transform;
-            camObj.transform.localPosition = new Vector3(0, 0, -100f);
-            Camera cam = camObj.AddComponent<Camera>();
-            cam.clearFlags = CameraClearFlags.Depth;
-            cam.orthographic = true;
-            cam.farClipPlane = 200f;
-            can.worldCamera = cam;
-            cam.cullingMask = 1 << 5;
-            cam.nearClipPlane = -50f;
-            cam.farClipPlane = 50f;
+            //GameObject camObj = new GameObject("UICamera");
+            //camObj.layer = LayerMask.NameToLayer("UI");
+            //camObj.transform.parent = go.transform;
+            //camObj.transform.localPosition = new Vector3(0, 0, -100f);
+            //Camera cam = camObj.AddComponent<Camera>();
+            //cam.clearFlags = CameraClearFlags.Depth;
+            //cam.orthographic = true;
+            //cam.farClipPlane = 200f;
+            //can.worldCamera = cam;
+            //cam.cullingMask = 1 << 5;
+            //cam.nearClipPlane = -50f;
+            //cam.farClipPlane = 50f;
 
-            m_Instance.uiCamera = cam;
+            //m_Instance.uiCamera = cam;
 
-            //add audio listener
-            camObj.AddComponent<AudioListener>();
-            camObj.AddComponent<GUILayer>();
+            ////add audio listener
+            //camObj.AddComponent<AudioListener>();
+            //camObj.AddComponent<GUILayer>();
 
-            CanvasScaler cs = go.AddComponent<CanvasScaler>();
-            cs.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            cs.referenceResolution = new Vector2(ResolutionWidth, ResolutionHeight);
-            cs.screenMatchMode = CanvasScaler.ScreenMatchMode.Expand;
+            //CanvasScaler cs = go.AddComponent<CanvasScaler>();
+            //cs.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            //cs.referenceResolution = new Vector2(ResolutionWidth, ResolutionHeight);
+            //cs.screenMatchMode = CanvasScaler.ScreenMatchMode.Expand;
 
-            ////add auto scale camera fix size.
-            //TTCameraScaler tcs = go.AddComponent<TTCameraScaler>();
-            //tcs.scaler = cs;
+            //////add auto scale camera fix size.
+            ////TTCameraScaler tcs = go.AddComponent<TTCameraScaler>();
+            ////tcs.scaler = cs;
 
-            //set the raycaster
-            //GraphicRaycaster gr = go.AddComponent<GraphicRaycaster>();
+            ////set the raycaster
+            ////GraphicRaycaster gr = go.AddComponent<GraphicRaycaster>();
 
-            GameObject subRoot;
+            //GameObject subRoot;
 
-            subRoot = CreateSubCanvasForRoot(go.transform, 0);
-            subRoot.name = "NormalRoot";
-            m_Instance.normalRoot = subRoot.transform;
-            m_Instance.normalRoot.transform.localScale = Vector3.one;
+            //subRoot = CreateSubCanvasForRoot(go.transform, 0);
+            //subRoot.name = "NormalRoot";
+            //m_Instance.normalRoot = subRoot.transform;
+            //m_Instance.normalRoot.transform.localScale = Vector3.one;
 
-            subRoot = CreateSubCanvasForRoot(go.transform, 250);
-            subRoot.name = "FixedRoot";
-            m_Instance.fixedRoot = subRoot.transform;
-            m_Instance.fixedRoot.transform.localScale = Vector3.one;
+            //subRoot = CreateSubCanvasForRoot(go.transform, 250);
+            //subRoot.name = "FixedRoot";
+            //m_Instance.fixedRoot = subRoot.transform;
+            //m_Instance.fixedRoot.transform.localScale = Vector3.one;
 
-            subRoot = CreateSubCanvasForRoot(go.transform, 500);
-            subRoot.name = "PopupRoot";
-            m_Instance.popupRoot = subRoot.transform;
-            m_Instance.popupRoot.transform.localScale = Vector3.one;
+            //subRoot = CreateSubCanvasForRoot(go.transform, 500);
+            //subRoot.name = "PopupRoot";
+            //m_Instance.popupRoot = subRoot.transform;
+            //m_Instance.popupRoot.transform.localScale = Vector3.one;
 
-            //add Event System
-            GameObject esObj = GameObject.Find("EventSystem");
-            if (esObj != null) {
-                GameObject.DestroyImmediate(esObj);
-            }
+            ////add Event System
+            //GameObject esObj = GameObject.Find("EventSystem");
+            //if (esObj != null) {
+            //    GameObject.DestroyImmediate(esObj);
+            //}
 
-            GameObject eventObj = new GameObject("EventSystem");
-            eventObj.layer = LayerMask.NameToLayer("UI");
-            eventObj.transform.SetParent(go.transform);
-            eventObj.AddComponent<EventSystem>();
-            eventObj.AddComponent<UnityEngine.EventSystems.StandaloneInputModule>();
+            //GameObject eventObj = new GameObject("EventSystem");
+            //eventObj.layer = LayerMask.NameToLayer("UI");
+            //eventObj.transform.SetParent(go.transform);
+            //eventObj.AddComponent<EventSystem>();
+            //eventObj.AddComponent<UnityEngine.EventSystems.StandaloneInputModule>();
 
-        }      
+        }
         static GameObject CreateSubCanvasForRoot(Transform root, int sort) {
             GameObject go = new GameObject("canvas");
             go.transform.parent = root;
@@ -247,14 +259,102 @@ namespace TinyTeam.UI
         }
         #endregion
 
+        #region 界面内开启协程
+        class CoItem {
+            internal IEnumerator m_Itor;
+            internal string Name = "";
+            internal Coroutine Co;
+        }
+        Dictionary<string, CoItem> m_dict = new Dictionary<string, CoItem>(StringComparer.OrdinalIgnoreCase);
+        public enum CoEndType {
+            /// <summary>
+            /// 正常结束,包括执行错误也是
+            /// </summary>
+            Normal = 0,
+            /// <summary>
+            /// 通过CoStop主动结束
+            /// </summary>
+            BeStopped = 1
+        }
+        /// <summary>
+        /// 协程运行完毕时发生
+        /// </summary>
+        public event Action<string, CoEndType> OnCoroutineEnd;
+        public Coroutine CoStart(string name, IEnumerator co) {
+            if (IsCoRuning(name)) {
+                Debug.LogError("TTUIRoot.CoManager已经开启:" + name);
+                return null;
+            }
+            CoItem it = new CoItem { Name = name, m_Itor = co };
+            m_dict.Add(name, it);
+            it.Co = this.StartCoroutine(InternalStartCo(it));
+            return it.Co;
+        }
+        private IEnumerator InternalStartCo(CoItem it) {
+            bool wait = false;
+            Debug.LogWarning("TTUIRoot.CoManager开启:" + it.Name);
+            while (true) {
+                try {
+                    wait = it.m_Itor.MoveNext();
+                }
+                catch (Exception ee) {
+                    //记录
+                    Debug.LogError("TTUIRoot.Comanager执行发生异常,Name:" + it == null ? "null" : it.Name + " Error:" + ee);
+                    wait = false;
+                }
+                if (wait) {
+                    yield return it.m_Itor.Current;
+                }
+                else {
+                    Debug.LogWarning("TTUIRoot.CoManager结束:" + it == null ? "null" : it.Name);
+                    m_dict.Remove(it.Name);
+                    if (OnCoroutineEnd != null) {
+                        OnCoroutineEnd(it.Name, CoEndType.Normal);
+                    }
+                    break;
+                }
+            }
+
+        }
+        public void CoStop(string name) {
+            CoItem it;
+            if (m_dict.TryGetValue(name, out it)) {
+                this.StopCoroutine(it.Co);
+
+                Debug.LogWarning("[TTUIRoot].CoStop:" + name);
+                m_dict.Remove(name);
+                if (OnCoroutineEnd != null) {
+                    OnCoroutineEnd(it.Name, CoEndType.BeStopped);
+                }
+            }
+
+        }
+        /// <summary>
+        /// 返回true,表示自定义名称的协程还在执行
+        /// </summary>
+        /// <param name="name"></param>
+        /// <returns></returns>
+        public bool IsCoRuning(string name) {
+            return m_dict.ContainsKey(name);
+        }
+        #endregion
+
         #region page管理
         //all pages with the union type
-        private Dictionary<string, TTUIPage> m_allPages;// = new Dictionary<string, TTUIPage>();
-        public Dictionary<string, TTUIPage> allPages { get { return m_allPages; } }
+        private Dictionary<string, TTUIPage> m_allPages = new Dictionary<string, TTUIPage>();
+        public Dictionary<string, TTUIPage> allPages {
+            get {
+                return m_allPages;
+            }
+        }
 
         //control 1>2>3>4>5 each page close will back show the previus page.
         private List<TTUIPage> m_currentPageNodes;//= new List<TTUIPage>();
-        public List<TTUIPage> currentPageNodes { get { return m_currentPageNodes; } }
+        public List<TTUIPage> currentPageNodes {
+            get {
+                return m_currentPageNodes;
+            }
+        }
         #endregion
         //public static Func<string, Object> delegateSyncLoadUI = null;
         ///// <summary>
@@ -311,7 +411,8 @@ namespace TinyTeam.UI
         private void HideOldNodes() {
             //List<TTUIPage> m_currentPageNodes = page.TTUIRoot_Instance.currentPageNodes;
 
-            if (m_currentPageNodes.Count < 0) return;
+            if (m_currentPageNodes.Count < 0)
+                return;
             TTUIPage topPage = m_currentPageNodes[m_currentPageNodes.Count - 1];
             if (topPage.mode == UIMode.HideOther) {
                 //form bottm to top.
@@ -328,7 +429,7 @@ namespace TinyTeam.UI
         private void ShowPage<T>(Action callback, object pageData, bool isAsync) where T : TTUIPage, new() {
             ShowPage<T>(typeof(T).ToString(), callback, pageData, isAsync);
         }
-        private void ShowPage<T>(string tpagename,Action callback, object pageData, bool isAsync) where T : TTUIPage, new() {
+        private void ShowPage<T>(string tpagename, Action callback, object pageData, bool isAsync) where T : TTUIPage, new() {
             Type t = typeof(T);
             string pageName = tpagename;//t.ToString();
 
@@ -385,7 +486,7 @@ namespace TinyTeam.UI
         /// <typeparam name="T"></typeparam>
         /// <param name="uipath"></param>
         public void ShowPage<T>(string uipath) where T : TTUIPage, new() {
-            T instance = new T() ;
+            T instance = new T();
             instance.name = uipath;
             instance.uiPath = uipath;
             ShowPage(uipath, instance);
@@ -397,7 +498,7 @@ namespace TinyTeam.UI
             ShowPage<T>(null, pageData, false);
         }
 
-        protected void ShowPage(string pageName, TTUIPage pageInstance) {
+        public void ShowPage(string pageName, TTUIPage pageInstance) {
             ShowPage(pageName, pageInstance, null, null, false);
         }
 
@@ -414,11 +515,11 @@ namespace TinyTeam.UI
         /// <summary>
         /// [异步]使用指定的资源(指定uipath为page的名称和路径)异步显示页面 Async Show Page with Async loader bind in 'TTUIBind.Bind()'
         /// </summary>
-        public void ShowPage<T>(string uipath,Action callback) where T : TTUIPage, new() {
+        public void ShowPage<T>(string uipath, Action callback) where T : TTUIPage, new() {
             T instance = new T();
             instance.name = uipath;
             instance.uiPath = uipath;
-            ShowPage(uipath,instance,callback);
+            ShowPage(uipath, instance, callback);
         }
         /// <summary>
         /// [异步]
@@ -433,7 +534,7 @@ namespace TinyTeam.UI
         /// <summary>
         ///[异步] Async Show Page with Async loader bind in 'TTUIBind.Bind()'
         /// </summary>
-        protected void ShowPage(string pageName, TTUIPage pageInstance, Action callback) {
+        public void ShowPage(string pageName, TTUIPage pageInstance, Action callback) {
             ShowPage(pageName, pageInstance, callback, null, true);
         }
         /// <summary>
@@ -453,7 +554,8 @@ namespace TinyTeam.UI
         public void ClosePage() {
             //Debug.Log("Back&Close PageNodes Count:" + m_currentPageNodes.Count);
 
-            if (m_currentPageNodes == null || m_currentPageNodes.Count <= 1) return;
+            if (m_currentPageNodes == null || m_currentPageNodes.Count <= 1)
+                return;
 
             TTUIPage closePage = m_currentPageNodes[m_currentPageNodes.Count - 1];
             m_currentPageNodes.RemoveAt(m_currentPageNodes.Count - 1);
@@ -479,7 +581,8 @@ namespace TinyTeam.UI
         /// Close target page
         /// </summary>
         public void ClosePage(TTUIPage target) {
-            if (target == null) return;
+            if (target == null)
+                return;
             if (target.isActive() == false) {
                 if (m_currentPageNodes != null) {
                     for (int i = 0; i < m_currentPageNodes.Count; i++) {
@@ -570,12 +673,30 @@ namespace TinyTeam.UI
             return page as T;
         }
         #endregion
+        #region 声音播放
+        //bool  isSoundPause;
+        public void PlaySound_ButtonClick() {
+            //SoundMgr.Instance.PlaySfxSound(clipName, true);
+            SoundManager.Singleton.PlayUISound("click.ogg");
+        }
+
+        //public void PauseButtonClick() {
+        //    isSoundPause = !isSoundPause;
+        //    if (isSoundPause) Time.timeScale = 0;
+        //    else Time.timeScale = 1;
+        //}
+
+       
+        #endregion
+
         void OnDestroy() {
+           
+            //Debug.LogError(this.transform.gameObject.name);
             //m_Instance = null;
             if (this.m_allPages != null) {
                 foreach (var v in m_allPages) {
                     v.Value._release();
-                }                
+                }
             }
             this.m_allPages = null;
             this.m_currentPageNodes = null;

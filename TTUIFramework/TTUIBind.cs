@@ -9,7 +9,7 @@
     public class TTUIBind : MonoBehaviour {
         static bool isBind = false;
         /// <summary>
-        /// 资源加载接口
+        /// 资源加载接口 
         /// </summary>
         public static IUIResLoader UIResLoader;
         public static void Bind() {
@@ -27,9 +27,10 @@
             if(UIResLoader != null) {
                 return UIResLoader.LoadResSync(name);
             }
+            throw new Exception("UIResLoader未赋值");
             //同步加载
-            var go = Resources.Load(name);
-            return go;
+            //var go = Resources.Load(name);
+            //return go;
         }
         public static void LoadAssetBundleAsync(string name, Action<UnityEngine.Object> callback) {
             //异步加载
@@ -38,8 +39,7 @@
                 UIResLoader.LoadResAsync(name, callback);
             }
             else {
-                var go = Resources.Load(name);
-                callback(go);
+                throw new Exception("UIResLoader未赋值");
             }
         }
     }
